@@ -32,6 +32,29 @@ const router = express.Router();
 /* 作答區
 router.METHOD('PATH', async (req, res) => { ... });
 */
+router.post('/register', async (req, res) => {
+    try{
+        const { email, password } = req.body;
+        if (!email || !password) {
+            return res.status(400).json({ status: 'false', message: '缺少 email 或 password' });
+        }
+
+        const existingUser = users.find(user => user.email === email);
+        if (existingUser) {
+            return res.status(400).json({ status: 'false', message: 'Email 已存在' });
+        }
+
+        const salt = await bcrypt.genSalt(10); // 10 = salt 強度（越大越慢越安全）
+        const hashedPassword = await bcrypt.hash(password, salt);
+
+        const newUser = { id: nextId++, email, password: hashedPassword };
+        users.push(newUser);
+
+        return res.status(201).json({ status: 'success', message: '註冊成功' });
+    }catch(err){
+        return res.status(500).json({ status: 'false', message: '伺服器錯誤' });
+    }
+});
 
 // ───────────────────────────────────────────────────────────
 // TODO 任務三：POST /login
@@ -49,6 +72,26 @@ router.METHOD('PATH', async (req, res) => { ... });
 /* 作答區
 router.METHOD('PATH', async (req, res) => { ... });
 */
+router.post('/login', async (req, res) => {
+    try {
+        const { email, password } = req.body;
+        const user = users.find(user => user.email === email);
+        if (!user) {
+            return res.status(401).json({ status: 'false', message: '帳號或密碼錯誤' });
+        }
+
+        const isMatch = await bcrypt.compare(password, user.password);
+        if (!isMatch) {
+            return res.status(401).json({ status: 'false', message: '帳號或密碼錯誤' });
+        }
+
+        const token = jwt.sign({ id: user.id, email: user.email }, process.env.JWT_SECRET, { expiresIn: '30d' });
+
+        return res.status(200).json({ status: 'success', token });
+    } catch (err) {
+        return res.status(500).json({ status: 'false', message: '伺服器錯誤' });
+    }
+});
 
 // ───────────────────────────────────────────────────────────
 // TODO 任務四：GET /me（受保護）
@@ -60,5 +103,8 @@ router.METHOD('PATH', async (req, res) => { ... });
 /* 作答區
 router.METHOD('PATH', middleware, (req, res) => { ... });
 */
+router.get('/me', verifyToken, (req, res) => {
+    return res.status(200).json({ status: 'success', user: req.user });
+});
 
 module.exports = router;
